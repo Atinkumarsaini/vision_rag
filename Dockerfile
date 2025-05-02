@@ -21,7 +21,6 @@
 # ENTRYPOINT ["streamlit", "run", "src/streamlit_app.py", "--server.port=8501", "--server.address=0.0.0.0"]
 
 
-
 FROM python:3.13.3
 
 # Set the working directory inside the container
@@ -36,32 +35,36 @@ RUN apt-get update && apt-get install -y \
     # Clean up apt cache to reduce image size
     && rm -rf /var/lib/apt/lists/*
 
-# Copy application files
-# requirements.txt first to leverage Docker cache
+# Copy application files (requirements.txt first for caching)
 COPY requirements.txt ./
-# Copy the .env file before installing requirements (optional, but ensures it's there)
-# Make sure your .env file is in the same directory as your Dockerfile locally
+# Copy the .env file before installing requirements (optional)
 COPY .env ./
 # Copy source code
 COPY src/ ./src/
 
 # Install Python dependencies
-# pip3 install --no-cache-dir -r requirements.txt will now install python-dotenv
 RUN pip3 install --no-cache-dir -r requirements.txt
 
-# --- Permission and User Setup (from previous answer, still important) ---
-
-# Streamlit sometimes tries to write config/cache outside WORKDIR or as root.
-# Set STREAMLIT_HOME to a known writable location inside WORKDIR.
-ENV STREAMLIT_HOME="/app/.streamlit"
-# Create the .streamlit directory. It will initially be owned by root.
-RUN mkdir -p "${STREAMIT_HOME}"
+# --- Permission and User Setup ---
 
 # Create a non-root user and group named 'appuser'
 RUN groupadd appuser && useradd -g appuser -m appuser
 
-# Change ownership of the /app directory (and its contents) to the non-root user.
-# This ensures the non-root user can read/write here.
+# Set STREAMLIT_HOME to a known writable location inside WORKDIR for the non-root user.
+ENV STREAMLIT_HOME="/app/.streamlit"
+
+# Explicitly create directories required by the application and Streamlit cache *as root*
+# This ensures they exist before switching users and can be correctly chowned.
+# Include .streamlit, img, and pdf_pages
+RUN mkdir -p "${STREAMLIT_HOME}" /app/img /app/pdf_pages
+
+# Create the Streamlit config file to disable usage statistics, which causes the permission error.
+# This file must be in the STREAMLIT_HOME directory.
+RUN echo '[browser]' > "${STREAMLIT_HOME}/config.toml" && \
+    echo 'gatherUsageStats = false' >> "${STREAMLIT_HOME}/config.toml"
+
+# Change ownership of the /app directory (and its contents, including the directories/config file just created)
+# to the non-root user. This ensures the non-root user can read/write here.
 RUN chown -R appuser:appuser /app
 
 # Switch to the non-root user
