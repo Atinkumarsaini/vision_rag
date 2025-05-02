@@ -38,7 +38,6 @@ RUN apt-get update && apt-get install -y \
 # Copy application files (requirements.txt first for caching)
 COPY requirements.txt ./
 # Copy the .env file before installing requirements (optional)
-COPY .env ./
 # Copy source code
 COPY src/ ./src/
 
